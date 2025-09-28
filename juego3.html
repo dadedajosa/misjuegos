@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Juego Matemático</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 50px;
+      background-color: #f4f4f4;
+    }
+
+    h1 {
+      margin-bottom: 30px;
+    }
+
+    .problema {
+      font-size: 36px;
+      margin: 20px 0;
+    }
+
+    input[type="number"] {
+      padding: 10px;
+      font-size: 18px;
+      width: 100px;
+      text-align: center;
+    }
+
+    button {
+      margin-top: 20px;
+      padding: 10px 20px;
+      font-size: 18px;
+      cursor: pointer;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 5px;
+    }
+
+    #resultado {
+      margin-top: 20px;
+      font-weight: bold;
+    }
+
+    #puntaje {
+      margin-top: 30px;
+      font-size: 20px;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>🧠 Juego Matemático</h1>
+
+  <div class="problema" id="problema">Cargando...</div>
+
+  <input type="number" id="respuesta" placeholder="Tu respuesta" />
+  <br />
+  <button onclick="verificarRespuesta()">Comprobar</button>
+
+  <div id="resultado"></div>
+
+  <div id="puntaje">Puntaje: 0</div>
+
+  <br>
+  <button onclick="window.location.href='index.html'">🔙 Volver a la pantalla principal</button>
+
+  <script>
+    let numero1, numero2, operador, resultadoCorrecto;
+    let puntaje = 0;
+
+    function generarProblema() {
+      numero1 = Math.floor(Math.random() * 20) + 1;
+      numero2 = Math.floor(Math.random() * 20) + 1;
+      const operadores = ["+", "-", "*"];
+      operador = operadores[Math.floor(Math.random() * operadores.length)];
+
+      switch (operador) {
+        case "+":
+          resultadoCorrecto = numero1 + numero2;
+          break;
+        case "-":
+          resultadoCorrecto = numero1 - numero2;
+          break;
+        case "*":
+          resultadoCorrecto = numero1 * numero2;
+          break;
+      }
+
+      document.getElementById("problema").textContent = `${numero1} ${operador} ${numero2} = ?`;
+      document.getElementById("respuesta").value = "";
+      document.getElementById("respuesta").focus();
+      document.getElementById("resultado").textContent = "";
+    }
+
+    function verificarRespuesta() {
+      const respuesta = parseInt(document.getElementById("respuesta").value);
+      if (respuesta === resultadoCorrecto) {
+        document.getElementById("resultado").textContent = "✅ ¡Correcto!";
+        puntaje += 1;
+        document.getElementById("puntaje").textContent = "Puntaje: " + puntaje;
+      } else {
+        document.getElementById("resultado").textContent = `❌ Incorrecto. La respuesta era ${resultadoCorrecto}`;
+      }
+
+      setTimeout(generarProblema, 1500); // Espera 1.5 segundos y genera otra
+    }
+
+    // Iniciar juego
+    generarProblema();
+  </script>
+</body>
+</html>

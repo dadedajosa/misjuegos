@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Juego de Boxeo 2D</title>
+  <style>
+    html,body{height:100%;margin:0;background:#222;color:#fff;font-family:Inter,system-ui,Arial}
+    .wrap{display:flex;flex-direction:column;align-items:center;padding:12px}
+    canvas{background:linear-gradient(#3a6,#2b4);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.6)}
+    .hud{display:flex;gap:16px;margin:8px 0;font-weight:600}
+    .playerHUD{display:flex;flex-direction:column;align-items:center}
+    .controls{margin-top:10px;font-size:14px;opacity:.9}
+    .msg{margin-top:8px;font-size:16px;font-weight:bold;text-align:center}
+    .winner{font-size:48px;font-weight:900;color:#ff0;text-shadow:2px 2px 8px #000;}
+    #touchControls { display:flex; flex-wrap:wrap; justify-content:center; gap:8px; margin-top:12px; }
+    #touchControls button { padding:12px 18px; font-size:16px; border-radius:6px; border:none; cursor:pointer; }
+    #touchControls button:active { background:#555; color:#fff; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h2>Boxeo 2D — 2 jugadores</h2>
+    <div class="hud">
+      <div class="playerHUD" id="hud1">Jugador 1: <span id="l1">♥♥♥♥♥</span></div>
+      <div class="playerHUD" id="hud2">Jugador 2: <span id="l2">♥♥♥♥♥</span></div>
+    </div>
+
+    <canvas id="c" width="900" height="420"></canvas>
+    <div class="controls">
+      <div><strong>Jugador 1:</strong> A/D mover • W golpear • S cubrir</div>
+      <div><strong>Jugador 2:</strong> ←/→ mover • ↑ golpear • ↓ cubrir</div>
+    </div>
+
+    <!-- Botones táctiles para móvil -->
+    <div id="touchControls">
+      <!-- Jugador 1 -->
+      <button id="p1Izq">←</button>
+      <button id="p1Der">→</button>
+      <button id="p1Golpe">Golpear</button>
+      <button id="p1Bloque">Bloquear</button>
+
+      <!-- Jugador 2 -->
+      <button id="p2Izq">←</button>
+      <button id="p2Der">→</button>
+      <button id="p2Golpe">Golpear</button>
+      <button id="p2Bloque">Bloquear</button>
+    </div>
+
+    <div class="msg" id="msg">Objetivo: quitar las 5 vidas al oponente. Cuando golpeas hay pausa y vuelven a su posición.</div>
+  </div>
+
+  <button onclick="window.location.href='index.html'">🔙 Volver a la pantalla principal</button>
+
+  <script>
+(() => {
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+
+  const startPositions = [{x: 230,y:300},{x: W-230,y:300}];
+  let isPaused = false;
+  let gameOver = false;
+
+  class Player {
+    constructor(idx, color){
+      this.idx = idx;
+      this.color = color;
+      this.x = startPositions[idx].x;
+      this.y = startPositions[idx].y;
+      this.w = 36; this.h = 68;
+      this.facing = idx===0?1:-1;
+      this.vx = 0;
+      this.speed = 3.2;
+      this.punching = false;
+      this.punchProgress = 0;
+      this.blocking = false;
+      this.lives = 5;
+      this.dead = false;
+    }
+    resetPos(){ this.x = startPositions[this.idx].x; this.y = startPositions[this.idx].y; this.vx=0; }
+    update(){
+      if(this.dead) return;
+      this.x += this.vx;
+      if(this.idx === 0 && this.x + this.w/2 > players[1].x - players[1].w/2){
+        this.x = players[1].x - players[1].w/2 - this.w/2;
+      }
+      if(this.idx === 1 && this.x - this.w/2 < players[0].x + players[0].w/2){
+        this.x = players[0].x + players[0].w/2 + this.w/2;
+      }
+      this.x = Math.max(80, Math.min(W-80, this.x));
+      if(this.punching){ this.punchProgress += 0.12; if(this.punchProgress>=1){ this.punchProgress=1; this.punching=false; } }
+      else { this.punchProgress = Math.max(0, this.punchProgress - 0.08); }
+    }
+    startPunch(){ if(this.blocking || this.dead || isPaused || gameOver) return; if(this.punching) return; this.punching=true; this.punchProgress=0; }
+    startBlock(val){ if(this.dead || isPaused || gameOver) return; this.blocking = val; if(val) this.punching=false; }
+    draw(ctx){
+      ctx.save();
+      ctx.translate(this.x, this.y);
+      ctx.fillStyle = 'rgba(0,0,0,0.12)'; ctx.beginPath(); ctx.ellipse(0,34,40,12,0,0,Math.PI*2); ctx.fill();
+
+      ctx.fillStyle = '#2d2d2d'; ctx.fillRect(-16,36,12,28); ctx.fillRect(4,36,12,28);
+      ctx.fillStyle = this.color; ctx.fillRect(-this.w/2, -this.h/2, this.w, this.h);
+
+      ctx.beginPath(); ctx.fillStyle = '#f7d6c2'; ctx.arc(0,-this.h/2 - 22,20,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle='#222'; ctx.fillRect(-8,-this.h/2-26,6,3); ctx.fillRect(4,-this.h/2-26,6,3);
+
+      const armOriginL = {x:-this.w/2 + 2, y:-10};
+      const armOriginR = {x:this.w/2 - 2, y:-10};
+
+      const lead = this.facing === 1 ? armOriginR : armOriginL;
+      const back = this.facing === 1 ? armOriginL : armOriginR;
+
+      drawArm(ctx, back.x, back.y, this.blocking ? -Math.PI/2 : (this.facing===1?-Math.PI/6:-5*Math.PI/6), 0.9, 0, true, this.facing);
+      const stretch = this.punchProgress;
+      const punchAngle = this.facing === 1 ? -Math.PI/6 : -5*Math.PI/6;
+      drawArm(ctx, lead.x, lead.y, (this.blocking? -Math.PI/2 : punchAngle), 1 + stretch*0.5, stretch, false, this.facing);
+
+      ctx.restore();
+    }
+  }
+
+  function drawArm(ctx, ox, oy, angle, scale=1, punchStretch=0, isBlocking=false, facing=1){
+    ctx.save();
+    ctx.translate(ox, oy);
+    ctx.rotate(angle);
+    ctx.scale(scale,1);
+    ctx.fillStyle = '#f7d6c2'; ctx.fillRect(0,0,12,8);
+    ctx.translate(12,4);
+    const fore = isBlocking ? 28 : 28 + punchStretch*28;
+    ctx.fillRect(0,-6,fore,10);
+    ctx.beginPath(); ctx.ellipse(fore+8,0,12,12,0,0,Math.PI*2); ctx.fillStyle = '#c33'; ctx.fill();
+    ctx.restore();
+  }
+
+  const p1 = new Player(0,'#1e90ff');
+  const p2 = new Player(1,'#ff6b6b');
+  const players = [p1,p2];
+
+  const keys = {};
+  window.addEventListener('keydown', e => { keys[e.key] = true; handleKeys(); });
+  window.addEventListener('keyup', e => { keys[e.key] = false; handleKeys(); });
+
+  function handleKeys(){
+    p1.vx = 0; p2.vx = 0;
+    if(!isPaused && !gameOver){
+      if(keys['a'] || keys['A']) p1.vx = -p1.speed;
+      if(keys['d'] || keys['D']) p1.vx = p1.speed;
+      if(keys['ArrowLeft']) p2.vx = -p2.speed;
+      if(keys['ArrowRight']) p2.vx = p2.speed;
+
+      if(keys['w'] || keys['W']) p1.startPunch();
+      p1.startBlock(!!keys['s'] || !!keys['S']);
+
+      if(keys['ArrowUp']) p2.startPunch();
+      p2.startBlock(!!keys['ArrowDown']);
+    }
+  }
+
+  function checkHits(){
+    if(isPaused || gameOver) return;
+    const reachBase = 60;
+    if(p1.punchProgress > 0.45){
+      const reach = reachBase + p1.punchProgress*40;
+      const dx = p2.x - p1.x;
+      const dy = (p2.y-90) - (p1.y-90);
+      if(Math.abs(dx) < reach && Math.sign(dx) === p1.facing && Math.abs(dy)<40){
+        if(!p2.blocking){ applyHit(p2, p1); }
+        else { pushBack(p1, p2); }
+      }
+    }
+    if(p2.punchProgress > 0.45){
+      const reach = reachBase + p2.punchProgress*40;
+      const dx = p1.x - p2.x;
+      const dy = (p1.y-90) - (p2.y-90);
+      if(Math.abs(dx) < reach && Math.sign(dx) === p2.facing && Math.abs(dy)<40){
+        if(!p1.blocking){ applyHit(p1, p2); }
+        else { pushBack(p2, p1); }
+      }
+    }
+  }
+
+  function pushBack(attacker, defender){
+    const push = 20 * attacker.facing;
+    attacker.x -= push;
+  }
+
+  function applyHit(target, attacker){
+    if(target._justHit || gameOver) return;
+    target._justHit = true;
+    target.lives = Math.max(0, target.lives - 1);
+    updateHUD();
+
+    if(target.lives <= 0){
+      target.dead = true;
+      gameOver = true;
+      const winner = attacker.idx === 0 ? 'Jugador 1' : 'Jugador 2';
+      document.getElementById('msg').innerHTML = '<span class="winner">¡' + winner + ' gana!</span><br/>Pulsa R para reiniciar.';
+      return;
+    }
+
+    isPaused = true;
+    setTimeout(()=>{
+      p1.resetPos(); p2.resetPos();
+      p1.punching = false; p2.punching = false;
+      p1.blocking = false; p2.blocking = false;
+      setTimeout(()=>{target._justHit = false;},300);
+      isPaused = false;
+    }, 900);
+  }
+
+  function updateHUD(){
+    const toHearts = n => '♥'.repeat(n) + '♡'.repeat(5-n);
+    document.getElementById('l1').textContent = toHearts(p1.lives);
+    document.getElementById('l2').textContent = toHearts(p2.lives);
+  }
+
+  window.addEventListener('keydown', e => {
+    if(e.key === 'r' || e.key === 'R') resetGame();
+  });
+
+  function resetGame(){
+    p1.lives = 5; p2.lives = 5; p1.dead=false; p2.dead=false; p1.resetPos(); p2.resetPos(); updateHUD(); document.getElementById('msg').textContent = 'Objetivo: quitar las 5 vidas al oponente. Cuando golpeas hay pausa y vuelven a su posición.'; gameOver=false; isPaused=false;
+  }
+
+  function drawStage(){
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(0,H-64,W,64);
+    for(let i=0;i<3;i++){
+      ctx.fillStyle = 'rgba(255,255,255,0.03)'; ctx.fillRect(0,80+i*18,W,2);
+    }
+  }
+
+  function drawHUD(){
+    [p1,p2].forEach(p => {
+      const bx = p.x - 36, by = p.y - 130;
+      ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(bx-2,by-2,74,12);
+      ctx.fillStyle = '#e44'; ctx.fillRect(bx,by, (p.lives/5)*68,8);
+      ctx.strokeStyle = '#000'; ctx.strokeRect(bx,by,68,8);
+    });
+  }
+
+  function loop(){
+    if(!isPaused && !gameOver){ p1.update(); p2.update(); }
+    p1.facing = p1.x < p2.x ? 1 : -1;
+    p2.facing = p2.x < p1.x ? 1 : -1;
+    if(!gameOver) checkHits();
+    drawStage();
+    drawHUD();
+    p1.draw(ctx); p2.draw(ctx);
+    requestAnimationFrame(loop);
+  }
+
+  // Botones táctiles
+  document.getElementById('p1Izq').addEventListener('touchstart', ()=>{p1.vx=-p1.speed;});
+  document.getElementById('p1Izq').addEventListener('touchend', ()=>{p1.vx=0;});
+  document.getElementById('p1Der').addEventListener('touchstart', ()=>{p1.vx=p1.speed;});
+  document.getElementById('p1Der').addEventListener('touchend', ()=>{p1.vx=0;});
+  document.getElementById('p1Golpe').addEventListener('touchstart', ()=>{p1.startPunch();});
+  document.getElementById('p1Bloque').addEventListener('touchstart', ()=>{p1.startBlock(true);});
+  document.getElementById('p1Bloque').addEventListener('touchend', ()=>{p1.startBlock(false);});
+
+  document.getElementById('p2Izq').addEventListener('touchstart', ()=>{p2.vx=-p2.speed;});
+  document.getElementById('p2Izq').addEventListener('touchend', ()=>{p2.vx=0;});
+  document.getElementById('p2Der').addEventListener('touchstart', ()=>{p2.vx=p2.speed;});
+  document.getElementById('p2Der').addEventListener('touchend', ()=>{p2.vx=0;});
+  document.getElementById('p2Golpe').addEventListener('touchstart', ()=>{p2.startPunch();});
+  document.getElementById('p2Bloque').addEventListener('touchstart', ()=>{p2.startBlock(true);});
+  document.getElementById('p2Bloque').addEventListener('touchend', ()=>{p2.startBlock(false);});
+
+  updateHUD(); loop();
+})();
+  </script>
+</body>
+</html

@@ -1,0 +1,292 @@
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sopa de Letras Interactiva</title>
+<style>
+  body {
+    font-family: monospace;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-top: 30px;
+  }
+  table {
+    border-collapse: collapse;
+    user-select: none;
+  }
+  td {
+    border: 1px solid #333;
+    width: 30px;
+    height: 30px;
+    text-align: center;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 18px;
+  }
+  td.selected {
+    background-color: yellow;
+  }
+  #palabras {
+    margin-top: 20px;
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .palabra {
+    padding: 5px 10px;
+    border: 1px solid #333;
+    border-radius: 5px;
+    user-select: none;
+    font-weight: bold;
+    background-color: #eee;
+  }
+  .palabra.encontrada {
+    background-color: lightgreen;
+    text-decoration: line-through;
+  }
+</style>
+</head>
+<body>
+  <table id="sopa">
+    <tbody></tbody>
+  </table>
+
+  <div id="palabras"></div>
+  
+<script>
+  const tamaño = 10;
+
+  const listaDeGrupos = [
+    ["CASA", "PERRO", "GATO", "SOL", "LUNA"],
+    ["RATON", "ARBOL", "AGUA", "FUEGO", "TIERRA"],
+    ["LAGO", "MONTAÑA", "NUBE", "VIENTO", "MAR"],
+  ];
+
+  let palabras;
+  let sopa;
+  let seleccion = [];
+  let palabrasEncontradas = new Set();
+
+  function crearSopa() {
+    sopa = Array(tamaño).fill(null).map(() => Array(tamaño).fill(''));
+  }
+
+  function llenarConLetras() {
+    const letras = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    for(let i=0; i<tamaño; i++) {
+      for(let j=0; j<tamaño; j++) {
+        if (sopa[i][j] === '') {
+          sopa[i][j] = letras.charAt(Math.floor(Math.random()*letras.length));
+        }
+      }
+    }
+  }
+
+  function colocarPalabras() {
+    for(let palabra of palabras) {
+      let colocado = false;
+      let intentos = 0;
+      while(!colocado && intentos < 100) {
+        intentos++;
+        let orientacion = Math.floor(Math.random()*2);
+        if (orientacion === 0) {
+          let fila = Math.floor(Math.random() * tamaño);
+          let col = Math.floor(Math.random() * (tamaño - palabra.length));
+          let puedeColocar = true;
+          for(let i=0; i<palabra.length; i++) {
+            let letraExistente = sopa[fila][col+i];
+            if (letraExistente !== '' && letraExistente !== palabra[i]) {
+              puedeColocar = false;
+              break;
+            }
+          }
+          if(puedeColocar) {
+            for(let i=0; i<palabra.length; i++) {
+              sopa[fila][col+i] = palabra[i];
+            }
+            colocado = true;
+          }
+        } else {
+          let fila = Math.floor(Math.random() * (tamaño - palabra.length));
+          let col = Math.floor(Math.random() * tamaño);
+          let puedeColocar = true;
+          for(let i=0; i<palabra.length; i++) {
+            let letraExistente = sopa[fila+i][col];
+            if (letraExistente !== '' && letraExistente !== palabra[i]) {
+              puedeColocar = false;
+              break;
+            }
+          }
+          if(puedeColocar) {
+            for(let i=0; i<palabra.length; i++) {
+              sopa[fila+i][col] = palabra[i];
+            }
+            colocado = true;
+          }
+        }
+      }
+      if(!colocado) {
+        console.warn("No se pudo colocar la palabra:", palabra);
+      }
+    }
+  }
+
+  function mostrarSopa() {
+    const tbody = document.querySelector("#sopa tbody");
+    tbody.innerHTML = '';
+    for(let i=0; i<tamaño; i++) {
+      const fila = document.createElement("tr");
+      for(let j=0; j<tamaño; j++) {
+        const celda = document.createElement("td");
+        celda.textContent = sopa[i][j];
+        celda.dataset.fila = i;
+        celda.dataset.col = j;
+        fila.appendChild(celda);
+      }
+      tbody.appendChild(fila);
+    }
+  }
+
+  function mostrarPalabras() {
+    const div = document.getElementById("palabras");
+    div.innerHTML = '';
+    for(let palabra of palabras) {
+      const span = document.createElement('span');
+      span.textContent = palabra;
+      span.classList.add('palabra');
+      span.id = 'palabra-'+palabra;
+      div.appendChild(span);
+    }
+  }
+
+  let seleccionando = false;
+
+  function obtenerTextoSeleccionado() {
+    return seleccion.map(c => c.textContent).join('');
+  }
+
+  function validarSeleccion() {
+    if (seleccion.length < 2) return false;
+    let texto = obtenerTextoSeleccionado();
+    let textoReves = texto.split('').reverse().join('');
+    for(let palabra of palabras) {
+      if(!palabrasEncontradas.has(palabra) && (texto === palabra || textoReves === palabra)) {
+        return palabra;
+      }
+    }
+    return false;
+  }
+
+  function marcarEncontrada(palabra) {
+    palabrasEncontradas.add(palabra);
+    document.getElementById('palabra-'+palabra).classList.add('encontrada');
+    limpiarSeleccion();
+    if(palabrasEncontradas.size === palabras.length) {
+      setTimeout(() => {
+        alert('¡Felicidades! Encontraste todas las palabras. Cargando nuevas palabras...');
+        cargarNuevoJuego();
+      }, 300);
+    }
+  }
+
+  function limpiarSeleccion() {
+    seleccion.forEach(c => c.classList.remove('selected'));
+    seleccion = [];
+  }
+
+  function configurarEventos() {
+    const celdas = document.querySelectorAll("#sopa td");
+    celdas.forEach(td => {
+
+      // Para mouse
+      td.addEventListener('mousedown', () => {
+        seleccionando = true;
+        if (!seleccion.includes(td)) {
+          td.classList.add('selected');
+          seleccion.push(td);
+        }
+      });
+      td.addEventListener('mouseover', () => {
+        if (seleccionando && !seleccion.includes(td)) {
+          td.classList.add('selected');
+          seleccion.push(td);
+        }
+      });
+
+      // Para touch
+      td.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        seleccionando = true;
+        if (!seleccion.includes(td)) {
+          td.classList.add('selected');
+          seleccion.push(td);
+        }
+      });
+      td.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        const touch = e.touches[0];
+        const elemento = document.elementFromPoint(touch.clientX, touch.clientY);
+        if(elemento && elemento.tagName === 'TD' && !seleccion.includes(elemento)) {
+          elemento.classList.add('selected');
+          seleccion.push(elemento);
+        }
+      });
+
+      td.addEventListener('mouseup', () => {
+        seleccionando = false;
+        let palabraEncontrada = validarSeleccion();
+        if(palabraEncontrada) {
+          marcarEncontrada(palabraEncontrada);
+        } else {
+          limpiarSeleccion();
+        }
+      });
+
+    });
+
+    document.body.addEventListener('mouseup', () => {
+      if(seleccionando) {
+        seleccionando = false;
+        let palabraEncontrada = validarSeleccion();
+        if(palabraEncontrada) {
+          marcarEncontrada(palabraEncontrada);
+        } else {
+          limpiarSeleccion();
+        }
+      }
+    });
+
+    document.body.addEventListener('touchend', () => {
+      if(seleccionando) {
+        seleccionando = false;
+        let palabraEncontrada = validarSeleccion();
+        if(palabraEncontrada) {
+          marcarEncontrada(palabraEncontrada);
+        } else {
+          limpiarSeleccion();
+        }
+      }
+    });
+
+  }
+
+  let indiceGrupo = 0;
+  function cargarNuevoJuego() {
+    palabras = listaDeGrupos[indiceGrupo];
+    indiceGrupo = (indiceGrupo + 1) % listaDeGrupos.length;
+    palabrasEncontradas = new Set();
+    crearSopa();
+    colocarPalabras();
+    llenarConLetras();
+    mostrarSopa();
+    mostrarPalabras();
+    configurarEventos();
+  }
+
+  cargarNuevoJuego();
+</script>
+  <button onclick="window.location.href='index.html'">🔙 Volver a la pantalla principal</button>
+</body>
+</html>
